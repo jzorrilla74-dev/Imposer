@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Imposer — PDF Imposition</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:         #141412;
+    --bg-raise:   #1c1b18;
+    --bg-soft:    #201f1c;
+    --bg-sunken:  #0f0e0c;
+    --text:       #F2EFE8;
+    --text-mid:   #8a857c;
+    --text-dim:   #56524b;
+    --rule:       #2a2925;
+    --rule-hi:    #3a3833;
+    --accent:     #5BBCB8;
+    --accent-d:   #2f6a68;
+    --accent-glow: rgba(91,188,184,0.14);
+    --copper:     #B87333;
+    --warn:       #d69850;
+    --err:        #c8553d;
+    --mono:       'DM Mono', ui-monospace, monospace;
+  }
+
+  html, body {
+    background: var(--bg);
+    background-image:
+      radial-gradient(900px 600px at 50% -100px, rgba(91,188,184,0.04), transparent 70%),
+      radial-gradient(700px 500px at 100% 100%, rgba(184,115,51,0.03), transparent 60%);
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.035;
+    mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.95 0 0 0 0 0.93 0 0 0 0 0.87 0 0 0 0.9 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  body {
+    color: var(--text);
+    font-family: var(--mono);
+    font-weight: 400;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 64px 28px 96px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: geometricPrecision;
+  }
+
+  .wrap { width: 100%; max-width: 720px; position: relative; }
+
+  /* ── Header ─────────────────────────────────────── */
+  header {
+    margin-bottom: 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--rule-hi);
+    position: relative;
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    left: 0; bottom: -1px;
+    width: 64px; height: 1px;
+    background: var(--accent);
+  }
+
+  .wordmark-block { display: flex; flex-direction: column; gap: 4px; }
+  .wordmark {
+    font-size: 38px;
+    letter-spacing: 0.12em;
+    color: var(--text);
+    text-transform: uppercase;
+    font-weight: 500;
+    line-height: 1;
+  }
+  .wordmark .dot { color: var(--accent); }
+  .tagline {
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    color: var(--text-mid);
+    text-transform: uppercase;
+    font-weight: 300;
+    margin-top: 8px;
+  }
+  .tagline em { font-style: italic; color: var(--text); font-weight: 400; }
+
+  .meta { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+  .badge {
+    font-size: 9px;
+    letter-spacing: 0.28em;
+    color: var(--text-mid);
+    border: 1px solid var(--rule-hi);
+    padding: 5px 10px;
+    text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+  }
+  .version {
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  /* ── Mode toggle ─────────────────────────────────── */
+  .mode-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-bottom: 48px;
+    position: relative;
+    border-bottom: 1px solid var(--rule-hi);
+  }
+  .mode-btn {
+    background: transparent;
+    color: var(--text-mid);
+    font-family: var(--mono);
+    padding: 18px 18px 22px;
+    cursor: pointer;
+    border: none;
+    text-align: left;
+    transition: color .2s;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .mode-btn .mode-num {
+    font-size: 9px;
+    letter-spacing: 0.32em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .mode-btn .mode-title {
+    font-size: 18px;
+    letter-spacing: 0.04em;
+    color: inherit;
+    font-weight: 500;
+    text-transform: none;
+  }
+  .mode-btn .mode-sub {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    color: var(--text-dim);
+    font-weight: 300;
+    font-style: italic;
+  }
+  .mode-btn:hover { color: var(--text); }
+  .mode-btn.active { color: var(--text); }
+  .mode-btn.active .mode-num { color: var(--accent); }
+  .mode-indicator {
+    position: absolute;
+    bottom: -1px; left: 0;
+    width: 50%;
+    height: 2px;
+    background: var(--accent);
+    transition: transform .35s cubic-bezier(.6,.05,.2,1);
+  }
+  body[data-mode="saddle"] .mode-indicator { transform: translateX(100%); }
+
+  /* ── Section labels ─────────────────────────────── */
+  .section-label {
+    font-size: 9px;
+    letter-spacing: 0.42em;
+    color: var(--text-mid);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .section-label .num { color: var(--text-dim); font-variant-numeric: tabular-nums; }
+  .section-label .name { color: var(--text); }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+
+  /* ── Drop zone ──────────────────────────────────── */
+  .drop-zone {
+    border: 1px dashed var(--rule-hi);
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    margin-bottom: 40px;
+    background: var(--bg-raise);
+    transition: border-color .2s, background .2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .drop-zone::before {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border: 1px dashed transparent;
+    pointer-events: none;
+    transition: border-color .2s;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: var(--bg-soft);
+  }
+  .drop-zone:hover::before { border-color: var(--accent-d); }
+  .drop-arrow {
+    width: 36px; height: 36px;
+    border: 1px solid var(--text-mid);
+    border-radius: 50%;
+    margin: 0 auto 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-mid);
+    font-size: 16px;
+    line-height: 1;
+    transition: color .2s, border-color .2s, transform .2s;
+  }
+  .drop-zone:hover .drop-arrow {
+    color: var(--accent);
+    border-color: var(--accent);
+    transform: translateY(2px);
+  }
+  .drop-primary {
+    font-size: 12px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .drop-secondary {
+    font-size: 10px;
+    color: var(--text-mid);
+    letter-spacing: 0.06em;
+    font-weight: 300;
+    font-style: italic;
+  }
+
+  .file-loaded {
+    display: none;
+    align-items: center;
+    gap: 16px;
+    padding: 18px 20px;
+    margin-bottom: 40px;
+    background: var(--bg-raise);
+    border: 1px solid var(--rule);
+    position: relative;
+  }
+  .file-loaded::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+  }
+  .file-loaded.show { display: flex; }
+  .file-icon {
+    width: 32px; height: 40px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--rule-hi);
+    position: relative;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+  }
+  .file-icon::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 8px; height: 8px;
+    background: var(--bg);
+    border-left: 1px solid var(--rule-hi);
+    border-bottom: 1px solid var(--rule-hi);
+  }
+  .file-meta { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .file-name {
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+  }
+  .file-info {
+    font-size: 9px;
+    color: var(--text-mid);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    display: flex;
+    gap: 14px;
+  }
+  .file-info span::before { content: '·'; margin-right: 14px; color: var(--text-dim); }
+  .file-info span:first-child::before { content: none; margin: 0; }
+  .clear-btn {
+    background: none;
+    border: 1px solid var(--rule-hi);
+    color: var(--text-mid);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: color .15s, border-color .15s;
+  }
+  .clear-btn:hover { border-color: var(--err); color: var(--err); }
+
+  /* ── Settings ───────────────────────────────────── */
+  .settings { margin-bottom: 40px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  .field { display: flex; flex-direction: column; gap: 9px; }
+  .field label { font-size: 9px; letter-spacing: 0.32em; color: var(--text-mid); text-transform: uppercase; }
+  .field label .hint {
+    color: var(--text-dim);
+    font-style: italic;
+    font-weight: 300;
+    letter-spacing: 0.1em;
+    text-transform: none;
+    margin-left: 6px;
+  }
+  .field select,
+  .field input[type="number"] {
+    background: var(--bg-raise);
+    border: 1px solid var(--rule-hi);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 11px 13px;
+    appearance: none;
+    outline: none;
+    transition: border-color .15s, background .15s;
+    width: 100%;
+  }
+  .field select {
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--text-mid) 50%),
+      linear-gradient(135deg, var(--text-mid) 50%, transparent 50%);
+    background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 30px;
+  }
+  .field select:focus,
+  .field input[type="number"]:focus {
+    border-color: var(--accent);
+    background: var(--bg-soft);
+  }
+  .field input[type="number"]::-webkit-inner-spin-button { opacity: 0.4; }
+
+  /* Segmented control */
+  .seg {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--rule-hi);
+    background: var(--bg-raise);
+    position: relative;
+  }
+  .seg button {
+    background: transparent;
+    border: none;
+    border-right: 1px solid var(--rule-hi);
+    color: var(--text-mid);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 12px 0 14px;
+    cursor: pointer;
+    transition: color .2s;
+    letter-spacing: 0.04em;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .seg button:last-child { border-right: none; }
+  .seg button .sub { font-size: 8px; letter-spacing: 0.18em; color: var(--text-dim); text-transform: uppercase; }
+  .seg button:hover { color: var(--text); }
+  .seg button.on { color: var(--text); }
+  .seg button.on .sub { color: var(--accent); }
+  .seg button.on::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  .checks { display: grid; gap: 4px; padding-top: 8px; grid-template-columns: 1fr 1fr; gap: 4px 18px; }
+  .field-check { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+  .field-check input[type="checkbox"] {
+    width: 14px; height: 14px;
+    appearance: none;
+    border: 1px solid var(--rule-hi);
+    background: var(--bg-raise);
+    position: relative;
+    cursor: pointer;
+    transition: border-color .15s;
+    flex-shrink: 0;
+  }
+  .field-check input[type="checkbox"]:checked { background: var(--accent); border-color: var(--accent); }
+  .field-check input[type="checkbox"]:checked::after {
+    content: '';
+    position: absolute;
+    left: 3px; top: 0px;
+    width: 5px; height: 9px;
+    border: solid var(--bg);
+    border-width: 0 1.5px 1.5px 0;
+    transform: rotate(45deg);
+  }
+  .field-check label { font-size: 11px; letter-spacing: 0.04em; color: var(--text); cursor: pointer; font-weight: 300; }
+
+  .mode-only-saddle, .mode-only-perfect { display: none; }
+  body[data-mode="saddle"]  .mode-only-saddle.field       { display: flex; }
+  body[data-mode="saddle"]  .mode-only-saddle.row         { display: grid; }
+  body[data-mode="saddle"]  .mode-only-saddle.field-check { display: flex; }
+  body[data-mode="perfect"] .mode-only-perfect.field-row  { display: grid; }
+
+  /* ── Pre-flight ─────────────────────────────────── */
+  .preflight { margin-bottom: 40px; display: grid; grid-template-columns: 1fr; gap: 24px; }
+
+  .numeric-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border: 1px solid var(--rule);
+    background: var(--bg-raise);
+  }
+  .stat { padding: 18px 18px 20px; border-right: 1px solid var(--rule); display: flex; flex-direction: column; gap: 6px; position: relative; }
+  .stat:last-child { border-right: none; }
+  .stat-label { font-size: 8px; letter-spacing: 0.32em; color: var(--text-mid); text-transform: uppercase; }
+  .stat-val {
+    font-size: 28px; line-height: 1; color: var(--text); letter-spacing: -0.01em;
+    font-weight: 400; font-variant-numeric: tabular-nums;
+    display: flex; align-items: baseline; gap: 6px;
+  }
+  .stat-val .unit { font-size: 10px; color: var(--text-mid); letter-spacing: 0.16em; text-transform: uppercase; }
+  .stat.accent .stat-val { color: var(--accent); }
+  .stat-note { font-size: 9px; color: var(--text-dim); letter-spacing: 0.08em; font-style: italic; }
+
+  .preflight-body {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    border: 1px solid var(--rule);
+    background: var(--bg-raise);
+  }
+  .checks-panel {
+    padding: 22px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border-right: 1px solid var(--rule);
+  }
+  .checks-title { font-size: 9px; letter-spacing: 0.32em; color: var(--text-mid); text-transform: uppercase; margin-bottom: 4px; }
+  .pf-check {
+    display: grid;
+    grid-template-columns: 18px 1fr;
+    gap: 12px;
+    align-items: start;
+    font-size: 11px;
+    line-height: 1.55;
+    padding: 8px 0;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .pf-check:last-child { border-bottom: none; }
+  .pf-check .glyph {
+    font-size: 13px; line-height: 1.2;
+    width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+  }
+  .pf-check.ok   .glyph { color: var(--accent); background: var(--accent-glow); }
+  .pf-check.warn .glyph { color: var(--warn); background: rgba(214,152,80,0.12); }
+  .pf-check.err  .glyph { color: var(--err);  background: rgba(200,85,61,0.12); }
+  .pf-check .desc { color: var(--text); font-weight: 300; }
+  .pf-check .desc .em { color: var(--text); font-weight: 400; }
+  .pf-check .note { display: block; color: var(--text-mid); font-size: 10px; margin-top: 3px; font-style: italic; }
+
+  .schematic-panel {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--bg-sunken);
+    gap: 12px;
+  }
+  .schematic-head {
+    display: flex; justify-content: space-between;
+    font-size: 8px; letter-spacing: 0.28em; text-transform: uppercase; color: var(--text-dim);
+  }
+  .schematic-head .live { color: var(--accent); }
+  .schematic { width: 100%; height: auto; display: block; }
+  .schematic-foot { text-align: center; font-size: 9px; letter-spacing: 0.18em; color: var(--text-mid); font-style: italic; text-transform: lowercase; }
+  .legend { display: flex; justify-content: center; gap: 14px; font-size: 8px; letter-spacing: 0.18em; color: var(--text-dim); text-transform: uppercase; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { display: inline-block; width: 12px; height: 1px; }
+  .legend i.cut  { background: repeating-linear-gradient(to right, var(--copper) 0 2px, transparent 2px 4px); }
+  .legend i.fold { background: repeating-linear-gradient(to right, var(--accent) 0 2px, transparent 2px 4px); }
+  .legend i.coll { width: 4px; height: 6px; background: var(--accent); }
+
+  /* ── Generate ───────────────────────────────────── */
+  .generate-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: stretch; }
+  .generate-btn {
+    background: var(--accent);
+    color: var(--bg);
+    border: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.36em;
+    text-transform: uppercase;
+    padding: 22px 28px;
+    cursor: pointer;
+    transition: background .15s, color .15s, letter-spacing .25s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    position: relative;
+  }
+  .generate-btn::after { content: '→'; font-size: 16px; transition: transform .25s; }
+  .generate-btn:hover:not(:disabled) { background: var(--text); letter-spacing: 0.4em; }
+  .generate-btn:hover:not(:disabled)::after { transform: translateX(4px); }
+  .generate-btn:disabled {
+    background: var(--bg-raise);
+    color: var(--text-dim);
+    cursor: not-allowed;
+    border: 1px solid var(--rule);
+  }
+  .est-btn {
+    background: transparent;
+    color: var(--text-mid);
+    border: 1px solid var(--rule-hi);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    padding: 0 20px;
+    cursor: default;
+    white-space: nowrap;
+  }
+  .est-btn em { color: var(--accent); font-style: normal; }
+
+  .progress-wrap { display: none; margin-bottom: 14px; margin-top: 14px; }
+  .progress-wrap.show { display: block; }
+  .progress-head {
+    display: flex; justify-content: space-between;
+    font-size: 9px; letter-spacing: 0.22em; color: var(--text-mid);
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .progress-pct { color: var(--accent); font-variant-numeric: tabular-nums; }
+  .progress-track { height: 3px; background: var(--rule); overflow: hidden; position: relative; }
+  .progress-fill { height: 100%; background: var(--accent); width: 0%; transition: width .3s ease; }
+
+  .status-msg { font-size: 11px; letter-spacing: 0.1em; padding: 10px 0; display: none; font-weight: 300; }
+  .status-msg.show { display: block; }
+  .status-ok { color: var(--accent); }
+  .status-err { color: var(--err); }
+
+  /* ── Print instructions ─────────────────────────── */
+  .print-note { margin-top: 52px; padding-top: 28px; border-top: 1px solid var(--rule); }
+  .note-title {
+    font-size: 9px; letter-spacing: 0.36em; text-transform: uppercase; color: var(--text-mid);
+    margin-bottom: 18px; display: flex; align-items: center; gap: 12px;
+  }
+  .note-title::after { content: ''; flex: 1; height: 1px; background: var(--rule); }
+  .note-steps {
+    list-style: none; counter-reset: steps;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px;
+  }
+  .note-steps li {
+    counter-increment: steps;
+    font-size: 11px; color: var(--text-mid); line-height: 1.6;
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 10px 0; border-bottom: 1px dashed var(--rule); font-weight: 300;
+  }
+  .note-steps li::before {
+    content: counter(steps, decimal-leading-zero);
+    color: var(--text-dim); font-size: 9px; letter-spacing: 0.18em; flex-shrink: 0; min-width: 20px;
+  }
+  .note-steps em { color: var(--accent); font-style: normal; }
+
+  footer {
+    margin-top: 72px; padding-top: 22px; border-top: 1px solid var(--rule);
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 9px; letter-spacing: 0.24em; color: var(--text-dim); text-transform: uppercase;
+  }
+  footer .lockup { display: flex; align-items: center; gap: 10px; }
+  footer .lockup .mark { width: 8px; height: 8px; background: var(--accent); display: inline-block; }
+  footer em { font-style: italic; color: var(--text-mid); }
+
+  @media (max-width: 640px) {
+    .preflight-body { grid-template-columns: 1fr; }
+    .checks-panel { border-right: none; border-bottom: 1px solid var(--rule); }
+    .numeric-strip { grid-template-columns: 1fr 1fr; }
+    .stat:nth-child(2) { border-right: none; }
+    .stat:nth-child(1), .stat:nth-child(2) { border-bottom: 1px solid var(--rule); }
+    .note-steps { grid-template-columns: 1fr; }
+    .checks { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body data-mode="perfect">
+<div class="wrap">
+
+  <header>
+    <div class="wordmark-block">
+      <div class="wordmark">Imposer<span class="dot">.</span></div>
+      <div class="tagline">Browser-local PDF imposition · <em>perfect bound &amp; saddle stitch</em></div>
+    </div>
+    <div class="meta">
+      <span class="badge">Local only</span>
+      <span class="version">v0.2 · pdf-lib 1.17</span>
+    </div>
+  </header>
+
+  <!-- Mode toggle -->
+  <div class="mode-toggle" role="tablist">
+    <button class="mode-btn active" data-mode="perfect" role="tab">
+      <span class="mode-num">01 · Mode</span>
+      <span class="mode-title">Perfect Bound</span>
+      <span class="mode-sub">5 × 8 in · cut &amp; stack · letter sheet</span>
+    </button>
+    <button class="mode-btn" data-mode="saddle" role="tab">
+      <span class="mode-num">02 · Mode</span>
+      <span class="mode-title">Saddle Stitch</span>
+      <span class="mode-sub">5.5 × 8.5 in · fold &amp; nest · letter or tabloid</span>
+    </button>
+    <div class="mode-indicator"></div>
+  </div>
+
+  <!-- 01 SOURCE -->
+  <div class="section-label"><span class="num">01</span><span class="name">Source PDF</span></div>
+
+  <div class="drop-zone" id="dropZone">
+    <input type="file" id="fileInput" accept=".pdf" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+    <div class="drop-arrow">↓</div>
+    <div class="drop-primary">Drop PDF or click to browse</div>
+    <div class="drop-secondary">Export from Affinity as single pages, spreads unchecked</div>
+  </div>
+
+  <div class="file-loaded" id="fileLoaded">
+    <div class="file-icon">PDF</div>
+    <div class="file-meta">
+      <span class="file-name" id="cardFilename"></span>
+      <span class="file-info">
+        <span id="cardPages"></span>
+        <span id="cardDims"></span>
+        <span id="cardSize"></span>
+      </span>
+    </div>
+    <button class="clear-btn" id="clearBtn">Replace</button>
+  </div>
+
+  <!-- 02 SETTINGS -->
+  <div class="section-label"><span class="num">02</span><span class="name">Settings</span></div>
+  <div class="settings">
+
+    <div class="field-row">
+      <div class="field">
+        <label>Sheet size</label>
+        <select id="sheetSize">
+          <option value="letter">US Letter — 8.5 × 11 in</option>
+          <option value="tabloid">Tabloid — 11 × 17 in</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Gap between pages <span class="hint">inches</span></label>
+        <input type="number" id="gap" value="0.25" step="0.0625" min="0" max="1">
+      </div>
+    </div>
+
+    <!-- Saddle-only: signature size -->
+    <div class="field mode-only-saddle" style="margin-bottom: 18px;">
+      <label>Signature size <span class="hint">pages per folded sheet group</span></label>
+      <div class="seg" id="sigSeg">
+        <button data-val="4">4<span class="sub">single</span></button>
+        <button data-val="8" class="on">8<span class="sub">standard</span></button>
+        <button data-val="16">16<span class="sub">thick</span></button>
+        <button data-val="32">32<span class="sub">max</span></button>
+      </div>
+    </div>
+
+    <!-- Saddle-only: output + sheet labels -->
+    <div class="field-row mode-only-saddle row">
+      <div class="field">
+        <label>Output</label>
+        <select id="outputMode">
+          <option value="single">Single combined PDF</option>
+          <option value="per-sig">One PDF per signature</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Sheet labels</label>
+        <select id="sheetLabelsSaddle">
+          <option value="none">None</option>
+          <option value="sequential">Page numbers on edge</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Perfect-only: sheet labels + orientation -->
+    <div class="field-row mode-only-perfect">
+      <div class="field">
+        <label>Sheet labels</label>
+        <select id="sheetLabelsPerfect">
+          <option value="none">None</option>
+          <option value="sequential">Page numbers on edge</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Orientation <span class="hint">2-up only</span></label>
+        <select disabled style="opacity:0.5">
+          <option>Landscape</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="checks">
+      <div class="field-check">
+        <input type="checkbox" id="crops" checked>
+        <label for="crops">Crop marks at page corners</label>
+      </div>
+      <div class="field-check mode-only-saddle">
+        <input type="checkbox" id="collation" checked>
+        <label for="collation">Collation marks on spine edge</label>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 03 PRE-FLIGHT -->
+  <div class="section-label"><span class="num">03</span><span class="name">Pre-flight</span></div>
+
+  <div class="preflight">
+
+    <!-- Hero numeric strip -->
+    <div class="numeric-strip">
+      <div class="stat">
+        <span class="stat-label">Source</span>
+        <span class="stat-val" id="statSrc">—</span>
+        <span class="stat-note" id="statSrcNote"></span>
+      </div>
+      <div class="stat accent">
+        <span class="stat-label" id="statMidLabel">Source / sheet</span>
+        <span class="stat-val" id="statMid">—</span>
+        <span class="stat-note" id="statMidNote"></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Sheets</span>
+        <span class="stat-val" id="statSheets">—</span>
+        <span class="stat-note" id="statSheetsNote"></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Output</span>
+        <span class="stat-val" id="statOut">—</span>
+        <span class="stat-note" id="statOutNote"></span>
+      </div>
+    </div>
+
+    <!-- Checks + schematic -->
+    <div class="preflight-body">
+      <div class="checks-panel" id="checksPanel">
+        <div class="checks-title">Verification</div>
+        <div class="pf-check" style="padding:16px 0">
+          <span class="desc" style="color:var(--text-dim);font-weight:300;font-size:11px;grid-column:1/-1">Load a PDF to see pre-flight results.</span>
+        </div>
+      </div>
+
+      <div class="schematic-panel">
+        <div class="schematic-head">
+          <span>Sheet 01</span>
+          <span class="live" id="schemMode">front · perfect bound</span>
+        </div>
+
+        <svg class="schematic" id="schematic" viewBox="0 0 200 144" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <!-- Sheet -->
+          <rect x="10" y="14" width="180" height="118" fill="#1c1b18" stroke="#3a3833" stroke-width="0.7"/>
+
+          <!-- Spine zone tint (saddle) -->
+          <rect id="spineZone" x="96" y="14" width="8" height="118" fill="#5BBCB8" opacity="0"/>
+
+          <!-- Cut line (perfect) -->
+          <line id="cutLine"  x1="100" y1="14" x2="100" y2="132" stroke="#B87333" stroke-width="0.7" stroke-dasharray="2 2.4"/>
+          <!-- Fold line (saddle) -->
+          <line id="foldLine" x1="100" y1="14" x2="100" y2="132" stroke="#5BBCB8" stroke-width="0.7" stroke-dasharray="2 2.4" opacity="0"/>
+
+          <!-- Pages -->
+          <rect x="28"  y="30" width="64" height="86" fill="#0f0e0c" stroke="#56524b" stroke-width="0.5"/>
+          <rect x="108" y="30" width="64" height="86" fill="#0f0e0c" stroke="#56524b" stroke-width="0.5"/>
+
+          <!-- Page labels -->
+          <text id="slotL" x="60"  y="78" text-anchor="middle" fill="#F2EFE8" font-family="DM Mono, monospace" font-size="14" letter-spacing="1">p1</text>
+          <text id="slotR" x="140" y="78" text-anchor="middle" fill="#F2EFE8" font-family="DM Mono, monospace" font-size="14" letter-spacing="1">p3</text>
+
+          <!-- Crop marks -->
+          <g stroke="#56524b" stroke-width="0.5">
+            <line x1="22" y1="30" x2="28" y2="30"/><line x1="28" y1="24" x2="28" y2="30"/>
+            <line x1="92" y1="30" x2="98" y2="30"/><line x1="92" y1="24" x2="92" y2="30"/>
+            <line x1="22" y1="116" x2="28" y2="116"/><line x1="28" y1="116" x2="28" y2="122"/>
+            <line x1="92" y1="116" x2="98" y2="116"/><line x1="92" y1="116" x2="92" y2="122"/>
+            <line x1="102" y1="30" x2="108" y2="30"/><line x1="108" y1="24" x2="108" y2="30"/>
+            <line x1="172" y1="30" x2="178" y2="30"/><line x1="172" y1="24" x2="172" y2="30"/>
+            <line x1="102" y1="116" x2="108" y2="116"/><line x1="108" y1="116" x2="108" y2="122"/>
+            <line x1="172" y1="116" x2="178" y2="116"/><line x1="172" y1="116" x2="172" y2="122"/>
+          </g>
+
+          <!-- Collation mark (saddle only) -->
+          <rect id="collationMark" x="97" y="44" width="6" height="8" fill="#5BBCB8" opacity="0"/>
+
+          <!-- Edge label -->
+          <text x="100" y="140" text-anchor="middle" fill="#56524b" font-family="DM Mono, monospace" font-size="6" letter-spacing="1.6">SHORT-EDGE BINDING</text>
+          <!-- Sheet index -->
+          <text x="14" y="10" fill="#56524b" font-family="DM Mono, monospace" font-size="5.5" letter-spacing="0.6">FRONT</text>
+          <text x="186" y="10" text-anchor="end" fill="#56524b" font-family="DM Mono, monospace" font-size="5.5" letter-spacing="0.6" id="schemKey">—</text>
+        </svg>
+
+        <div class="schematic-foot" id="schemFoot">cut down centre, stack in order</div>
+        <div class="legend">
+          <span><i class="cut"></i> cut</span>
+          <span style="display:none" id="legFold"><i class="fold"></i> fold</span>
+          <span style="display:none" id="legColl"><i class="coll"></i> collation</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 04 GENERATE -->
+  <div class="section-label"><span class="num">04</span><span class="name">Generate</span></div>
+
+  <div class="generate-row">
+    <button class="generate-btn" id="generateBtn" disabled>Generate Imposed PDF</button>
+    <button class="est-btn" id="estBtn">Est. <em>—</em></button>
+  </div>
+
+  <div class="progress-wrap" id="progressWrap">
+    <div class="progress-head">
+      <span id="progressLabel">Processing…</span>
+      <span class="progress-pct" id="progressPct">0%</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <div class="status-msg status-ok" id="statusOk">✓ Done — file downloaded</div>
+  <div class="status-msg status-err" id="statusErr"></div>
+
+  <!-- Printing instructions -->
+  <div class="print-note">
+    <div class="note-title">Printing instructions</div>
+    <ol class="note-steps">
+      <li>Open output PDF in Preview or Acrobat.</li>
+      <li>File → Print → Paper size: match sheet above.</li>
+      <li>Two-sided: <em>Short-edge binding</em> (tumble).</li>
+      <li>Scale: <em>Actual size</em> — do not scale to fit.</li>
+      <li id="cutStep">Cut each sheet down the centre crop mark.</li>
+      <li id="bindStep">Stack in order, send for <em>perfect binding</em>.</li>
+    </ol>
+  </div>
+
+  <footer>
+    <div class="lockup">
+      <span class="mark"></span>
+      <span>Imposer · v0.2</span>
+    </div>
+    <span><em>no upload · no tracking · no server</em></span>
+  </footer>
+
+</div>
+<script>
+// ─── pdf-lib setup ────────────────────────────────────────────────────────────
+const { PDFDocument, rgb, StandardFonts } = PDFLib;
+const $ = id => document.getElementById(id);
+
+// ─── Sheet dimensions ─────────────────────────────────────────────────────────
+const SHEETS = {
+  letter:  { w: 8.5*72, h: 11*72,  label: '8.5 × 11 in' },
+  tabloid: { w: 11*72,  h: 17*72,  label: '11 × 17 in'  },
+};
+
+// ─── Global state ─────────────────────────────────────────────────────────────
+let pdfBytes = null, pageCount = 0, srcPageW = 0, srcPageH = 0, srcFileSize = 0;
+let mode = 'perfect';
+let sig  = 8;
+
+// ─── Settings accessor ────────────────────────────────────────────────────────
+function getSettings() {
+  const key    = $('sheetSize').value;
+  const s      = SHEETS[key] || SHEETS.letter;
+  const sheetW = Math.max(s.w, s.h);
+  const sheetH = Math.min(s.w, s.h);
+  const gap    = parseFloat($('gap').value) * 72;
+  const addCrops     = $('crops').checked;
+  const addCollation = $('collation').checked;
+  const labelSel     = mode === 'saddle' ? $('sheetLabelsSaddle') : $('sheetLabelsPerfect');
+  const doLabels     = labelSel ? labelSel.value === 'sequential' : false;
+  const outMode      = $('outputMode').value || 'single';
+  return { sheetW, sheetH, gap, sheetLabel: s.label, addCrops, addCollation, doLabels, outMode };
+}
+
+// ─── File loading ─────────────────────────────────────────────────────────────
+const dz = $('dropZone');
+$('fileInput').addEventListener('change', e => loadFile(e.target.files[0]));
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault(); dz.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') loadFile(f);
+});
+
+async function loadFile(file) {
+  if (!file) return;
+  $('statusOk').classList.remove('show');
+  $('statusErr').classList.remove('show');
+  try {
+    srcFileSize = file.size;
+    const buf = await file.arrayBuffer();
+    const doc = await PDFDocument.load(buf);
+    pdfBytes  = buf;
+    pageCount = doc.getPageCount();
+    const { width, height } = doc.getPage(0).getSize();
+    srcPageW = width;
+    srcPageH = height;
+
+    $('cardFilename').textContent = file.name;
+    $('cardPages').textContent    = pageCount + ' pages';
+    $('cardDims').textContent     = (srcPageW/72).toFixed(2) + '″ × ' + (srcPageH/72).toFixed(2) + '″';
+    $('cardSize').textContent     = (srcFileSize / 1048576).toFixed(1) + ' MB';
+
+    dz.style.display = 'none';
+    $('fileLoaded').classList.add('show');
+    updatePreflight();
+  } catch(e) {
+    $('statusErr').textContent = '✕ Could not read PDF: ' + e.message;
+    $('statusErr').classList.add('show');
+  }
+}
+
+$('clearBtn').addEventListener('click', () => {
+  pdfBytes = null; pageCount = 0; srcPageW = 0; srcPageH = 0; srcFileSize = 0;
+  $('fileInput').value = '';
+  $('fileLoaded').classList.remove('show');
+  dz.style.display = '';
+  $('statusOk').classList.remove('show');
+  $('statusErr').classList.remove('show');
+  updatePreflight();
+});
+
+// ─── Mode toggle ──────────────────────────────────────────────────────────────
+document.querySelectorAll('.mode-btn').forEach(b => {
+  b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.body.dataset.mode = mode;
+    document.querySelectorAll('.mode-btn').forEach(x => x.classList.toggle('active', x === b));
+    updatePreflight();
+  });
+});
+
+// ─── Signature segmented control ──────────────────────────────────────────────
+document.querySelectorAll('#sigSeg button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#sigSeg button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    sig = parseInt(b.dataset.val, 10);
+    updatePreflight();
+  });
+});
+
+// ─── Settings change listeners ────────────────────────────────────────────────
+['sheetSize', 'gap', 'outputMode', 'sheetLabelsPerfect', 'sheetLabelsSaddle'].forEach(id => {
+  const el = $(id);
+  if (el) { el.addEventListener('change', updatePreflight); el.addEventListener('input', updatePreflight); }
+});
+['crops', 'collation'].forEach(id => {
+  const el = $(id);
+  if (el) el.addEventListener('change', updatePreflight);
+});
+
+// ─── Pre-flight ───────────────────────────────────────────────────────────────
+function updatePreflight() {
+  updateSchematic();
+  updateNumericStrip();
+  updateChecks();
+  updateGenerateBtn();
+  updateEstBtn();
+}
+
+function updateSchematic() {
+  const isSaddle = mode === 'saddle';
+  $('cutLine').setAttribute('opacity',      isSaddle ? '0' : '1');
+  $('foldLine').setAttribute('opacity',     isSaddle ? '1' : '0');
+  $('spineZone').setAttribute('opacity',    isSaddle ? '0.06' : '0');
+  $('collationMark').setAttribute('opacity', isSaddle ? '1' : '0');
+  $('slotL').textContent = isSaddle ? ('p' + sig) : 'p1';
+  $('slotR').textContent = isSaddle ? 'p1' : 'p3';
+  $('legFold').style.display = isSaddle ? 'inline-flex' : 'none';
+  $('legColl').style.display = isSaddle ? 'inline-flex' : 'none';
+  $('schemFoot').textContent = isSaddle ? 'outer sheet · fold & nest inward' : 'cut down centre, stack in order';
+  $('schemMode').textContent = isSaddle ? 'outer sheet · saddle' : 'front · perfect bound';
+  $('cutStep').innerHTML  = isSaddle ? '<em>Fold</em> each sheet down the centre.' : 'Cut each sheet down the centre crop mark.';
+  $('bindStep').innerHTML = isSaddle ? 'Nest signatures, <em>saddle stitch</em> through spine.' : 'Stack in order, send for <em>perfect binding</em>.';
+}
+
+function updateNumericStrip() {
+  if (!pageCount) {
+    $('statSrc').textContent      = '—';
+    $('statSrcNote').textContent  = '';
+    $('statMidLabel').textContent = mode === 'perfect' ? 'Source / sheet' : 'Signatures';
+    $('statMid').textContent      = '—';
+    $('statMidNote').textContent  = mode === 'perfect' ? '2 front · 2 back, slot-swapped' : 'nested, outer → inner';
+    $('statSheets').textContent   = '—';
+    $('statSheetsNote').textContent = '';
+    $('statOut').textContent      = '—';
+    $('statOutNote').textContent  = '';
+    $('schemKey').textContent     = '—';
+    return;
+  }
+
+  const { sheetLabel, outMode } = getSettings();
+
+  if (mode === 'perfect') {
+    const physSheets = Math.ceil(pageCount / 4);
+    const padded     = physSheets * 4;
+    const padDiff    = padded - pageCount;
+
+    $('statSrc').innerHTML        = pageCount + '<span class="unit">pp</span>';
+    $('statSrcNote').textContent  = padDiff ? '+ ' + padDiff + ' blank, padded to ' + padded : 'no padding needed';
+    $('statMidLabel').textContent = 'Source / sheet';
+    $('statMid').innerHTML        = '4<span class="unit">pp</span>';
+    $('statMidNote').textContent  = '2 front · 2 back, slot-swapped';
+    $('statSheets').innerHTML     = physSheets + '<span class="unit">duplex</span>';
+    $('statSheetsNote').textContent = sheetLabel + ' · landscape';
+    $('statOut').innerHTML        = (physSheets * 2) + '<span class="unit">pp</span>';
+    $('statOutNote').textContent  = 'single PDF';
+    $('schemKey').textContent     = '01 / ' + physSheets;
+  } else {
+    const padded      = Math.ceil(pageCount / sig) * sig;
+    const padDiff     = padded - pageCount;
+    const nSigs       = padded / sig;
+    const totalSheets = nSigs * (sig / 4);
+
+    $('statSrc').innerHTML        = pageCount + '<span class="unit">pp</span>';
+    $('statSrcNote').textContent  = padDiff ? '+ ' + padDiff + ' blank, padded to ' + padded : 'no padding needed';
+    $('statMidLabel').textContent = 'Signatures';
+    $('statMid').innerHTML        = nSigs + '<span class="unit">× ' + sig + 'pp</span>';
+    $('statMidNote').textContent  = 'nested, outer → inner';
+    $('statSheets').innerHTML     = totalSheets + '<span class="unit">duplex</span>';
+    $('statSheetsNote').textContent = sheetLabel + ' · landscape';
+    $('statOut').innerHTML        = (totalSheets * 2) + '<span class="unit">pp</span>';
+    $('statOutNote').textContent  = outMode === 'single' ? 'single PDF' : nSigs + ' PDFs · one per sig';
+    $('schemKey').textContent     = '01 / ' + totalSheets;
+  }
+}
+
+function makeCheck(state, title, body, note) {
+  const glyph = state === 'ok' ? '✓' : state === 'warn' ? '!' : '✕';
+  return '<div class="pf-check ' + state + '">' +
+    '<span class="glyph">' + glyph + '</span>' +
+    '<span class="desc"><span class="em">' + title + '</span> ' + body +
+    (note ? '<span class="note">' + note + '</span>' : '') +
+    '</span></div>';
+}
+
+function updateChecks() {
+  const panel = $('checksPanel');
+  let html = '<div class="checks-title">Verification</div>';
+
+  if (!pageCount) {
+    html += '<div class="pf-check" style="padding:16px 0"><span class="desc" style="color:var(--text-dim);font-weight:300;font-size:11px;grid-column:1/-1">Load a PDF to see pre-flight results.</span></div>';
+    panel.innerHTML = html;
+    return;
+  }
+
+  const { sheetW, sheetH, gap } = getSettings();
+  const pairW = srcPageW * 2 + gap;
+  const fits  = pairW <= sheetW && srcPageH <= sheetH;
+
+  // Check 1: pages fit on sheet
+  if (fits) {
+    const spare = ((sheetW - pairW) / 72).toFixed(3);
+    html += makeCheck('ok', 'Pages fit on sheet', 'with ' + spare + '″ to spare.');
+  } else {
+    html += makeCheck('err', 'Pages do not fit on sheet',
+      'pair is ' + (pairW/72).toFixed(2) + '″ wide, sheet is ' + (sheetW/72).toFixed(2) + '″.',
+      'Choose a larger sheet or reduce the gap.');
+  }
+
+  // Check 2: page count divisibility
+  const divisor = mode === 'perfect' ? 4 : sig;
+  const rem     = pageCount % divisor;
+  if (rem === 0) {
+    html += makeCheck('ok', 'Page count OK', 'divisible by ' + divisor + ' — no padding needed.');
+  } else {
+    const blanks = divisor - rem;
+    html += makeCheck('warn',
+      blanks + ' blank page' + (blanks > 1 ? 's' : '') + ' appended',
+      '',
+      pageCount + ' pp → padded to ' + (pageCount + blanks) + ' (divisible by ' + divisor + ').');
+  }
+
+  // Check 3: page orientation / spreads
+  if (srcPageW > srcPageH * 1.5) {
+    html += makeCheck('warn', 'Wide pages detected',
+      '— source may already be imposed spreads.',
+      'Re-export from Affinity with Spreads unchecked.');
+  } else if (srcPageW > srcPageH) {
+    html += makeCheck('warn', 'Landscape pages detected',
+      '— source pages are wider than tall.',
+      'Expected portrait pages for imposition.');
+  } else {
+    html += makeCheck('ok', 'Page size detected',
+      (srcPageW/72).toFixed(2) + '″ × ' + (srcPageH/72).toFixed(2) + '″ — portrait.');
+  }
+
+  // Check 4: high saddle page count
+  if (mode === 'saddle' && pageCount > 80) {
+    html += makeCheck('warn', 'High page count for saddle stitch',
+      pageCount + ' pages may produce a thick booklet.',
+      'Consider perfect binding for books over 80 pages.');
+  }
+
+  panel.innerHTML = html;
+}
+
+function updateGenerateBtn() {
+  const hasErr = $('checksPanel').querySelectorAll('.pf-check.err').length > 0;
+  $('generateBtn').disabled = !pageCount || hasErr;
+}
+
+function updateEstBtn() {
+  if (!pageCount) { $('estBtn').innerHTML = 'Est. <em>—</em>'; return; }
+  let physSheets;
+  if (mode === 'perfect') {
+    physSheets = Math.ceil(pageCount / 4);
+  } else {
+    const padded = Math.ceil(pageCount / sig) * sig;
+    physSheets   = (padded / sig) * (sig / 4);
+  }
+  const secs    = Math.max(1, Math.round(physSheets * 0.15));
+  const display = secs < 60 ? secs + ' s' : Math.round(secs / 60) + ' min';
+  $('estBtn').innerHTML = 'Est. <em>~' + display + '</em>';
+}
+
+// ─── Shared helpers ───────────────────────────────────────────────────────────
+
+// Place one source page onto an output sheet at NATIVE dimensions — no scaling.
+// Scaling causes pdf-lib to clip embedded form XObjects (cuts off page numbers).
+async function placePage(targetDoc, sheet, srcDoc, srcIdx, srcN, x, y, w, h, addCrops) {
+  if (srcIdx >= 0 && srcIdx < srcN) {
+    const [emb] = await targetDoc.embedPdf(srcDoc, [srcIdx]);
+    sheet.drawPage(emb, { x, y, width: w, height: h });
+  }
+  if (addCrops) drawCrops(sheet, x, y, w, h);
+}
+
+function drawCrops(page, x, y, w, h) {
+  const len = 14, off = 5, t = 0.4;
+  const c   = rgb(0.5, 0.5, 0.5);
+  const op  = { thickness: t, color: c, opacity: 0.8 };
+  // Bottom-left
+  page.drawLine({ start:{x:x-off,    y},          end:{x:x-off-len,  y},           ...op });
+  page.drawLine({ start:{x,          y:y-off},     end:{x,            y:y-off-len}, ...op });
+  // Bottom-right
+  page.drawLine({ start:{x:x+w+off,  y},           end:{x:x+w+off+len,y},           ...op });
+  page.drawLine({ start:{x:x+w,      y:y-off},     end:{x:x+w,        y:y-off-len}, ...op });
+  // Top-left
+  page.drawLine({ start:{x:x-off,    y:y+h},       end:{x:x-off-len,  y:y+h},       ...op });
+  page.drawLine({ start:{x,          y:y+h+off},   end:{x,            y:y+h+off+len},...op });
+  // Top-right
+  page.drawLine({ start:{x:x+w+off,  y:y+h},       end:{x:x+w+off+len,y:y+h},       ...op });
+  page.drawLine({ start:{x:x+w,      y:y+h+off},   end:{x:x+w,        y:y+h+off+len},...op });
+}
+
+function drawCollationMark(page, sheetW, sheetH, sheetWithinSig) {
+  // Staircase mark on spine edge — steps down 6pts per sheet within signature
+  const x = sheetW / 2 - 3;
+  const y = sheetH - 18 - (sheetWithinSig * 6);
+  page.drawRectangle({ x, y, width: 6, height: 8, color: rgb(91/255, 188/255, 184/255) });
+}
+
+function drawSheetLabel(sheet, sheetW, li, ri, srcN, font) {
+  const lbl = (li < srcN ? li+1 : '—') + ' / ' + (ri < srcN ? ri+1 : '—');
+  sheet.drawText(lbl, { x: sheetW/2 - 10, y: 5, size: 6, font, color: rgb(0.6,0.6,0.6) });
+}
+
+function dlFile(bytes, name) {
+  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+  Object.assign(document.createElement('a'), { href: url, download: name }).click();
+  URL.revokeObjectURL(url);
+}
+
+function setProgress(pct, label) {
+  $('progressFill').style.width  = pct + '%';
+  $('progressLabel').textContent = label;
+  $('progressPct').textContent   = Math.round(pct) + '%';
+}
+
+// ─── Perfect bound generator ──────────────────────────────────────────────────
+async function generatePerfect() {
+  const { sheetW, sheetH, gap, addCrops, doLabels } = getSettings();
+  const srcDoc = await PDFDocument.load(pdfBytes);
+  const srcN   = srcDoc.getPageCount();
+  const outDoc = await PDFDocument.create();
+  let font;
+  if (doLabels) font = await outDoc.embedFont(StandardFonts.Helvetica);
+
+  const physSheets = Math.ceil(srcN / 4);
+  const pairW      = srcPageW * 2 + gap;
+  const offsetX    = (sheetW - pairW) / 2;
+  const offsetY    = (sheetH - srcPageH) / 2;
+
+  for (let i = 0; i < physSheets; i++) {
+    setProgress((i / physSheets) * 90, 'Sheet ' + (i+1) + ' of ' + physSheets + '…');
+    if (i % 10 === 0) await new Promise(r => setTimeout(r, 0));
+
+    const p0=i*4, p1=i*4+1, p2=i*4+2, p3=i*4+3;
+
+    const front = outDoc.addPage([sheetW, sheetH]);
+    await placePage(outDoc, front, srcDoc, p0, srcN, offsetX,              offsetY, srcPageW, srcPageH, addCrops);
+    await placePage(outDoc, front, srcDoc, p2, srcN, offsetX+srcPageW+gap, offsetY, srcPageW, srcPageH, addCrops);
+    if (doLabels) drawSheetLabel(front, sheetW, p0, p2, srcN, font);
+
+    // Back slots swapped — short-edge duplex flips left↔right on landscape sheet
+    const back = outDoc.addPage([sheetW, sheetH]);
+    await placePage(outDoc, back, srcDoc, p3, srcN, offsetX,              offsetY, srcPageW, srcPageH, addCrops);
+    await placePage(outDoc, back, srcDoc, p1, srcN, offsetX+srcPageW+gap, offsetY, srcPageW, srcPageH, addCrops);
+    if (doLabels) drawSheetLabel(back, sheetW, p3, p1, srcN, font);
+  }
+
+  setProgress(95, 'Writing PDF…');
+  dlFile(await outDoc.save(), 'imposed-perfect-bound.pdf');
+}
+
+// ─── Saddle stitch generator ──────────────────────────────────────────────────
+async function generateSaddle() {
+  const { sheetW, sheetH, gap, addCrops, addCollation, doLabels, outMode } = getSettings();
+  const srcDoc = await PDFDocument.load(pdfBytes);
+  const srcN   = srcDoc.getPageCount();
+  const N      = sig;
+  const padded = Math.ceil(srcN / N) * N;
+  const nSigs  = padded / N;
+  const shPSig = N / 4;
+  const totalSheets = nSigs * shPSig;
+  const pairW   = srcPageW * 2 + gap;
+  const offsetX = (sheetW - pairW) / 2;
+  const offsetY = (sheetH - srcPageH) / 2;
+
+  let sharedDoc  = null;
+  let sharedFont = null;
+  if (outMode === 'single') {
+    sharedDoc = await PDFDocument.create();
+    if (doLabels) sharedFont = await sharedDoc.embedFont(StandardFonts.Helvetica);
+  }
+
+  let sheetsDone = 0;
+  for (let s = 0; s < nSigs; s++) {
+    // Per-sig: fresh document per signature
+    // Single: all signatures go into sharedDoc
+    const sigDoc = outMode === 'per-sig' ? await PDFDocument.create() : sharedDoc;
+    // Per correction: embed font fresh into each sigDoc in per-sig mode —
+    // a font embedded in one PDFDocument is not valid in another
+    const font = (outMode === 'per-sig' && doLabels)
+      ? await sigDoc.embedFont(StandardFonts.Helvetica)
+      : sharedFont;
+
+    const sigStart = s * N;
+
+    for (let i = 0; i < shPSig; i++) {
+      setProgress((sheetsDone / totalSheets) * 90,
+        'Sig ' + (s+1) + '/' + nSigs + ' · sheet ' + (i+1) + '/' + shPSig + '…');
+      if (sheetsDone % 10 === 0) await new Promise(r => setTimeout(r, 0));
+
+      // Saddle stitch imposition formula (0-indexed within padded page array):
+      //   front left  = last page counting inward
+      //   front right = first page counting inward
+      //   back slots swapped vs raw formula — short-edge duplex flips left↔right
+      const fL = sigStart + (N - 1 - 2*i);  // front left
+      const fR = sigStart + (2*i);           // front right
+      const bL = sigStart + (N - 2 - 2*i);  // back left  (pre-swapped for short-edge flip)
+      const bR = sigStart + (2*i + 1);       // back right (pre-swapped for short-edge flip)
+
+      const front = sigDoc.addPage([sheetW, sheetH]);
+      await placePage(sigDoc, front, srcDoc, fL, srcN, offsetX,              offsetY, srcPageW, srcPageH, addCrops);
+      await placePage(sigDoc, front, srcDoc, fR, srcN, offsetX+srcPageW+gap, offsetY, srcPageW, srcPageH, addCrops);
+      if (addCollation) drawCollationMark(front, sheetW, sheetH, i);
+      if (doLabels && font) drawSheetLabel(front, sheetW, fL, fR, srcN, font);
+
+      const back = sigDoc.addPage([sheetW, sheetH]);
+      await placePage(sigDoc, back, srcDoc, bL, srcN, offsetX,              offsetY, srcPageW, srcPageH, addCrops);
+      await placePage(sigDoc, back, srcDoc, bR, srcN, offsetX+srcPageW+gap, offsetY, srcPageW, srcPageH, addCrops);
+      if (addCollation) drawCollationMark(back, sheetW, sheetH, i);
+      if (doLabels && font) drawSheetLabel(back, sheetW, bL, bR, srcN, font);
+
+      sheetsDone++;
+    }
+
+    if (outMode === 'per-sig') {
+      setProgress(90 + (s / nSigs) * 8, 'Writing sig ' + (s+1) + ' of ' + nSigs + '…');
+      const sigNum = String(s + 1).padStart(2, '0');
+      dlFile(await sigDoc.save(), 'imposed-saddle-sig-' + sigNum + '.pdf');
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
+
+  if (outMode === 'single') {
+    setProgress(95, 'Writing PDF…');
+    dlFile(await sharedDoc.save(), 'imposed-saddle-stitch.pdf');
+  }
+}
+
+// ─── Generate button ──────────────────────────────────────────────────────────
+$('generateBtn').addEventListener('click', async () => {
+  if (!pdfBytes) return;
+  $('statusOk').classList.remove('show');
+  $('statusErr').classList.remove('show');
+  $('generateBtn').disabled = true;
+  $('progressWrap').classList.add('show');
+  setProgress(0, 'Loading…');
+
+  try {
+    if (mode === 'perfect') await generatePerfect();
+    else                    await generateSaddle();
+    setProgress(100, '✓ Done');
+    setTimeout(() => $('progressWrap').classList.remove('show'), 900);
+    $('statusOk').classList.add('show');
+  } catch(e) {
+    $('progressWrap').classList.remove('show');
+    $('statusErr').textContent = '✕ ' + e.message;
+    $('statusErr').classList.add('show');
+    console.error(e);
+  }
+  updateGenerateBtn();
+});
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+updatePreflight();
+</script>
+</body>
+</html>
