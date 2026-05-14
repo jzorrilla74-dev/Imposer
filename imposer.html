@@ -1297,8 +1297,8 @@ async function generateSaddle() {
       //   back slots swapped vs raw formula — short-edge duplex flips left↔right
       const fL = sigStart + (N - 1 - 2*i);  // front left
       const fR = sigStart + (2*i);           // front right
-      const bL = sigStart + (N - 2 - 2*i);  // back left  (pre-swapped for short-edge flip)
-      const bR = sigStart + (2*i + 1);       // back right (pre-swapped for short-edge flip)
+      const bL = sigStart + (2*i + 1);       // back left
+      const bR = sigStart + (N - 2 - 2*i);  // back right
 
       const front = sigDoc.addPage([sheetW, sheetH]);
       await placePage(sigDoc, front, srcDoc, fL, srcN, offsetX,              offsetY, srcPageW, srcPageH, addCrops);
